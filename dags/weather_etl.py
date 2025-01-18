@@ -5,11 +5,11 @@ from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
-import requests
+import requests, json
 
 ## latitudes and longitudes of the random place
-LATTITUDE = '14.49527'
-LONGITUDE = '74.81805'
+LATTITUDE = '<LATITUDE>'
+LONGITUDE = '<LONGITUDE>'
 POSTGRES_CONN_ID = 'postgres_default'
 API_CONN_ID = 'open_meteo_api'
 
@@ -26,26 +26,28 @@ with DAG(dag_id='weather_etl_pipeline',
     
     @task()
     def extract_weather_data():
-        """ Extracts weather data from the Open Meteo API using Airflow Connection"""
+        # """ Extracts weather data from the Open Meteo API using Airflow Connection"""
         
-        ## use http hook to get weather data through api
-        # http_hook = HttpHook(http_conn_id=API_CONN_ID,method='GET')
+        # ## use http hook to get weather data through api
+        # # http_hook = HttpHook(http_conn_id=API_CONN_ID,method='GET')
 
-        ## build api endpoint
-        ## https://api.open-meteo.com/v1/forecast?latitude=14.49527&longitude=74.81805&current_weather=true
+        # ## build api endpoint
+        # ## https://api.open-meteo.com/v1/forecast?latitude=14.49527&longitude=74.81805&current_weather=true
         endpoint = f"https://api.open-meteo.com/v1/forecast?lattitude={LATTITUDE}$longitude={LONGITUDE}&current_weather=true"
 
         ## make request vio http hook
         response = requests.get(endpoint, verify=False)
         if response == 200:
-            return response.json()
+            resp = response.json()
         else:
             raise Exception(f"failed to fetch data:{response.status_code}")
+        # xyz = {"latitude":14.5,"longitude":74.875,"generationtime_ms":0.04291534423828125,"utc_offset_seconds":0,"timezone":"GMT","timezone_abbreviation":"GMT","elevation":578.0,"current_weather_units":{"time":"iso8601","interval":"seconds","temperature":"°C","windspeed":"km/h","winddirection":"°","is_day":"","weathercode":"wmo code"},"current_weather":{"time":"2025-01-12T17:30","interval":900,"temperature":22.0,"windspeed":4.5,"winddirection":76,"is_day":0,"weathercode":3}}
+        return resp["current_weather"]
         
     @task()
     def transform_weather_data(weather_data):
         """Transform extracted weather data"""
-        current_weather = weather_data['current-weather']
+        current_weather = weather_data
         transformed_data = {
             'latitude': LATTITUDE,
             'longitude': LONGITUDE,
@@ -80,7 +82,7 @@ with DAG(dag_id='weather_etl_pipeline',
         cursor.execute("""
         INSERT INTO weather_data(latitude,longitude,temperature,windspeed,winddirection,weathercode)
         VALUES(%s,%s,%s,%s,%s,%s)
-        """(
+        """,(
             transformed_data['latitude'],
             transformed_data['longitude'],
             transformed_data['temperature'],
